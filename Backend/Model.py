@@ -2,8 +2,6 @@ import cohere # cohere API client for AI model interaction
 from rich import print # console output ko ache se print krvane k liye
 from dotenv import dotenv_values # loads environment variables from a .env file
 
-# Load .env file locally (ignored if .env doesn't exist, e.g. on Vercel)
-load_dotenv()
 
 # Get API key from environment variables
 CohereAPIKey = os.environ.get("CohereAPIKey")
