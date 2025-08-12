@@ -3,7 +3,7 @@ from groq import Groq
 from json import dump, load
 from dotenv import dotenv_values
 import datetime
-
+import os
 
 # Retrieve environment variables
 creater = os.environ.get("Username")
