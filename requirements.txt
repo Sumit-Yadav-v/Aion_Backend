@@ -12,3 +12,5 @@ pygame
 edge-tts
 requests
 Pillow
+firebase-admin
+
