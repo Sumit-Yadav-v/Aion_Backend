@@ -1,4 +1,14 @@
 fastapi
-uvicorn
-mangum
+pydantic
+python-dotenv
+groq
 cohere
+rich
+googlesearch-python
+selenium
+webdriver-manager
+mtranslate
+pygame
+edge-tts
+requests
+Pillow
