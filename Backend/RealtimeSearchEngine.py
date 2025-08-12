@@ -4,8 +4,6 @@ from json import dump, load
 from dotenv import dotenv_values
 import datetime
 
-# Load .env only if running locally (optional)
-load_dotenv()  
 
 # Retrieve environment variables
 creater = os.environ.get("Username")
