@@ -13,4 +13,4 @@ edge-tts
 requests
 Pillow
 firebase-admin
-
+mangum
