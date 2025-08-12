@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from Backend.Model import FirstLayerDMM
 from Backend.RealtimeSearchEngine import RealtimeSearchEngine
 from Backend.chatbot import ChatBot
+from mangum import Mangum
 
 #Query modifier to clean up the input query
 def QueryModifier(Query):
@@ -38,6 +39,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+handler = Mangum(app)
 
 @app.post("/chat")
 def chat(query: Query):
