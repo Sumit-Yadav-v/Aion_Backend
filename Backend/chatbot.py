@@ -8,8 +8,6 @@ import re
 # Ensure Data folder exists
 os.makedirs("Data", exist_ok=True)
 
-# Load .env file locally (won't affect Vercel since .env usually isn't present there)
-load_dotenv()
 
 # Get environment variables
 creater = os.environ.get("Username")
