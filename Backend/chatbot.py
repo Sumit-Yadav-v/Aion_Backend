@@ -1,13 +1,22 @@
 import os
 from groq import Groq
-from json import dump, load
 import datetime
-from dotenv import dotenv_values
 import re
+import json
+import firebase_admin
+from firebase_admin import credentials, firestore
+from dotenv import dotenv_values
 
-# Ensure Data folder exists
-os.makedirs("Data", exist_ok=True)
+# Initialize Firebase Admin SDK once
+if not firebase_admin._apps:
+    cred_json = os.environ.get("FIREBASE_CRED_JSON")
+    if not cred_json:
+        raise RuntimeError("FIREBASE_CRED_JSON environment variable not set")
+    cred_dict = json.loads(cred_json)
+    cred = credentials.Certificate(cred_dict)
+    firebase_admin.initialize_app(cred)
 
+db = firestore.client()
 
 # Get environment variables
 creater = os.environ.get("Username")
@@ -27,13 +36,21 @@ System = f"""Hello, I am {creater}, You are a very accurate and advanced Persona
 *** Provide Answers In a Professional Way, make sure to add full stops, commas, question marks, and use proper grammar.***
 *** Just answer the question from the provided data in a professional way. ***"""
 
-
 SystemChatBot = [{"role": "system", "content": System}]
 
-# Try to load chat log or create it
-if not os.path.exists("Data/ChatLog.json"):
-    with open("Data/ChatLog.json", "w") as f:
-        dump([], f)
+# Firestore chat log helpers
+def load_chat_log(user_id="default_user"):
+    doc_ref = db.collection("chat_logs").document(user_id)
+    doc = doc_ref.get()
+    if doc.exists:
+        data = doc.to_dict()
+        return data.get("messages", [])
+    else:
+        return []
+
+def save_chat_log(messages, user_id="default_user"):
+    doc_ref = db.collection("chat_logs").document(user_id)
+    doc_ref.set({"messages": messages})
 
 def RealtimeInformation():
     now = datetime.datetime.now()
@@ -50,10 +67,9 @@ def AnswerModifier(answer):
     # Remove extra whitespace
     return re.sub(r"\s+", " ", answer).strip()
 
-def ChatBot(query):
+def ChatBot(query, user_id="default_user"):
     try:
-        with open("Data/ChatLog.json", "r") as f:
-            messages = load(f)
+        messages = load_chat_log(user_id)
 
         messages.append({"role": "user", "content": query})
 
@@ -75,18 +91,18 @@ def ChatBot(query):
 
         messages.append({"role": "assistant", "content": answer})
 
-        with open("Data/ChatLog.json", "w") as f:
-            dump(messages, f, indent=4)
+        save_chat_log(messages, user_id)
 
         return answer
 
     except Exception as e:
         print(f"Error: {e}")
-        with open("Data/ChatLog.json", "w") as f:
-            dump([], f, indent=4)
-        return ChatBot(query)
+        # Reset chat log on error
+        save_chat_log([], user_id)
+        return ChatBot(query, user_id)
 
 if __name__ == "__main__":
+    user_id = "default_user"  # Change if you want multiple user sessions
     while True:
         user_input = input("Enter your question: ")
-        print(ChatBot(user_input))
+        print(ChatBot(user_input, user_id))
