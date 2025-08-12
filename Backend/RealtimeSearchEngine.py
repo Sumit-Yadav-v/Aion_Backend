@@ -1,25 +1,20 @@
 from googlesearch import search
 from groq import Groq
-from json import dump, load
-from dotenv import dotenv_values
 import datetime
 import os
 import json
-import firebase_admin
-from firebase_admin import credentials, firestore
+from supabase import create_client, Client  # Supabase client
 
-# Initialize Firebase Admin SDK (only once)
-if not firebase_admin._apps:
-    cred_json = os.environ.get("FIREBASE_CRED_JSON")
-    if not cred_json:
-        raise RuntimeError("FIREBASE_CRED_JSON environment variable not set")
-    cred_dict = json.loads(cred_json)
-    cred = credentials.Certificate(cred_dict)
-    firebase_admin.initialize_app(cred)
+# --- Supabase Initialization ---
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
-db = firestore.client()
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise RuntimeError("Supabase credentials are not set in environment variables.")
 
-# Retrieve environment variables
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# --- Retrieve environment variables ---
 creater = os.environ.get("Username")
 PersonalAssistant = os.environ.get("Assistantname")
 GroqAPIKey = os.environ.get("GroqAPIKey")
@@ -27,75 +22,70 @@ GroqAPIKey = os.environ.get("GroqAPIKey")
 if not GroqAPIKey:
     raise ValueError("GroqAPIKey environment variable not set.")
 
-# Create a Groq client
-client = Groq(api_key=GroqAPIKey)  # Groq API client for AI model interaction
+# --- Create Groq client ---
+client = Groq(api_key=GroqAPIKey)
 
-# Define a system message to set the context for the AI model
+# --- System message ---
 System = f"""Hello, I am {creater}, You are a very accurate and advanced Personal assistant named {PersonalAssistant} which has real-time up-to-date information from the internet.
 *** if user asks who created you, say you were created by {creater}.***
 ***Give short and concise answers unless the user asks for more details.***
 *** Provide Answers In a Professional Way, make sure to add full stops, commas, question marks, and use proper grammar.***
 *** Just answer the question from the provided data in a professional way. ***"""
 
-# Helper functions to load/save chat log from Firestore
+# --- Supabase DB functions ---
 def load_chat_log(user_id="default_user"):
-    doc_ref = db.collection("chat_logs").document(user_id)
-    doc = doc_ref.get()
-    if doc.exists:
-        data = doc.to_dict()
-        return data.get("messages", [])
-    else:
-        return []
+    res = supabase.table("chat_logs").select("messages").eq("user_id", user_id).execute()
+    if res.data:
+        return res.data[0]["messages"]
+    return []
 
 def save_chat_log(messages, user_id="default_user"):
-    doc_ref = db.collection("chat_logs").document(user_id)
-    doc_ref.set({"messages": messages})
+    supabase.table("chat_logs").upsert({
+        "user_id": user_id,
+        "messages": messages
+    }).execute()
 
+# --- Google Search helper ---
 def GoogleSearch(query):
     results = list(search(query, advanced=True, num_results=5))
     Answer = f"The search results for '{query}' are:\n\n"
     
     for i in results:
-        # i is a SearchResult object with title and description attributes
         Answer += f"Link: {i.title}\nDescription: {i.description}\n\n"
 
     Answer += "[end]"
     return Answer
 
+# --- Format answer ---
 def AnswerModifier(Answer):
     lines = Answer.split('\n')
     non_empty_lines = [line for line in lines if line.strip()]
-    modified_answer = '\n'.join(non_empty_lines)
-    return modified_answer
+    return '\n'.join(non_empty_lines)
 
+# --- System ChatBot memory ---
 SystemChatBot = [
     {"role": "system", "content": System},
     {"role": "user", "content": "hi"},
     {"role": "assistant", "content": "Hello, I am your personal assistant. How can I help you today?"}
 ]
 
+# --- Real-time info ---
 def Information():
-    current_date_time = datetime.datetime.now()
-    day = current_date_time.strftime("%A")
-    date = current_date_time.strftime("%d")
-    month = current_date_time.strftime("%B")
-    year = current_date_time.strftime("%Y")
-    hour = current_date_time.strftime("%H")
-    minute = current_date_time.strftime("%M")
-    second = current_date_time.strftime("%S")
-    data = f"Use this real-time information if needed:\n"
-    data += f"Day: {day}\n"
-    data += f"Date: {date}\n"
-    data += f"Month: {month}\n"
-    data += f"Year: {year}\n"
-    data += f"Time: {hour} hours : {minute} minutes : {second} seconds\n"
-    return data
+    now = datetime.datetime.now()
+    return (
+        f"Use this real-time information if needed:\n"
+        f"Day: {now.strftime('%A')}\n"
+        f"Date: {now.strftime('%d')}\n"
+        f"Month: {now.strftime('%B')}\n"
+        f"Year: {now.strftime('%Y')}\n"
+        f"Time: {now.strftime('%H')} hours : {now.strftime('%M')} minutes : {now.strftime('%S')} seconds\n"
+    )
 
+# --- Main chatbot function ---
 def RealtimeSearchEngine(prompt, user_id="default_user"):
     global SystemChatBot
 
-    messages = load_chat_log(user_id)
-    messages = messages[-10:]
+    messages = load_chat_log(user_id)[-10:]  # last 10 messages
     messages.append({"role": "user", "content": prompt})
 
     SystemChatBot.append({"role": "system", "content": GoogleSearch(prompt)})
@@ -107,7 +97,6 @@ def RealtimeSearchEngine(prompt, user_id="default_user"):
         max_tokens=4048,
         top_p=1.0,
         stream=True,
-        stop=None,
     )
 
     Answer = ""
@@ -115,16 +104,17 @@ def RealtimeSearchEngine(prompt, user_id="default_user"):
         if chunk.choices[0].delta.content:
             Answer += chunk.choices[0].delta.content
 
-    Answer = Answer.strip().replace("\\s", "")
+    Answer = Answer.strip()
     messages.append({"role": "assistant", "content": Answer})
 
     save_chat_log(messages, user_id)
 
     SystemChatBot.pop()
-    return AnswerModifier(Answer=Answer)
+    return AnswerModifier(Answer)
 
+# --- Run locally ---
 if __name__ == "__main__":
-    user_id = "default_user"  # You can customize or fetch dynamically per user
+    user_id = "default_user"
     while True:
         prompt = input("Enter your query: ")
         print(RealtimeSearchEngine(prompt, user_id))
