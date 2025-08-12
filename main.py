@@ -40,7 +40,7 @@ app.add_middleware(
 )
 
 
-@app.post("/chat")
+@app.post("/")
 def chat(query: Query):
     print(f"\n--- Incoming Query ---\n{query.text}\n")
 
