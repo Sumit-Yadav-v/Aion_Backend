@@ -2,13 +2,16 @@ import cohere # cohere API client for AI model interaction
 from rich import print # console output ko ache se print krvane k liye
 from dotenv import dotenv_values # loads environment variables from a .env file
 
-# Load environment variables from .env file
-env_vars = dotenv_values(".env")
+# Load .env file locally (ignored if .env doesn't exist, e.g. on Vercel)
+load_dotenv()
 
-#get API key from environment variables
-CohereAPIKey = env_vars.get("CohereAPIKey")
+# Get API key from environment variables
+CohereAPIKey = os.environ.get("CohereAPIKey")
 
-# create a cohere client
+if not CohereAPIKey:
+    raise ValueError("CohereAPIKey environment variable not set.")
+
+# Create a cohere client
 co = cohere.Client(api_key=CohereAPIKey)
 
 # functions for category classification
