@@ -4,16 +4,19 @@ from json import dump, load
 from dotenv import dotenv_values
 import datetime
 
-# Load environment variables from .env file
-env_vars = dotenv_values(".env")
+# Load .env only if running locally (optional)
+load_dotenv()  
 
-# Retrieve information from environment variables
-creater = env_vars.get("Username")
-PersonalAssistant = env_vars.get("Assistantname")
-GroqAPIKey = env_vars.get("GroqAPIKey")
+# Retrieve environment variables
+creater = os.environ.get("Username")
+PersonalAssistant = os.environ.get("Assistantname")
+GroqAPIKey = os.environ.get("GroqAPIKey")
+
+if not GroqAPIKey:
+    raise ValueError("GroqAPIKey environment variable not set.")
 
 # Create a Groq client
-client = Groq(api_key=GroqAPIKey)  # Groq API client for AI model interaction
+client = Groq(api_key=GroqAPIKey) # Groq API client for AI model interaction
 
 #define a system message to set the context for the AI model
 System = f"""Hello, I am {creater}, You are a very accurate and advanced Personal assistant named {PersonalAssistant} which has real-time up-to-date information from the internet.
