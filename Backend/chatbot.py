@@ -2,31 +2,24 @@ import os
 from groq import Groq
 import datetime
 import re
-import json
-import firebase_admin
-from firebase_admin import credentials, firestore
-from dotenv import dotenv_values
+from supabase import create_client, Client
 
-# Initialize Firebase Admin SDK once
-if not firebase_admin._apps:
-    cred_json = os.environ.get("FIREBASE_CRED_JSON")
-    if not cred_json:
-        raise RuntimeError("FIREBASE_CRED_JSON environment variable not set")
-    cred_dict = json.loads(cred_json)
-    cred = credentials.Certificate(cred_dict)
-    firebase_admin.initialize_app(cred)
-
-db = firestore.client()
-
-# Get environment variables
+# Load env variables
 creater = os.environ.get("Username")
 PersonalAssistant = os.environ.get("Assistantname")
 GroqAPIKey = os.environ.get("GroqAPIKey")
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
 if not GroqAPIKey:
     raise ValueError("GroqAPIKey environment variable not set.")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise ValueError("SUPABASE_URL or SUPABASE_KEY environment variables not set.")
 
-# Create Groq client
+# Supabase client
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Groq client
 client = Groq(api_key=GroqAPIKey)
 
 # System message
@@ -38,19 +31,15 @@ System = f"""Hello, I am {creater}, You are a very accurate and advanced Persona
 
 SystemChatBot = [{"role": "system", "content": System}]
 
-# Firestore chat log helpers
+# Supabase chat log helpers
 def load_chat_log(user_id="default_user"):
-    doc_ref = db.collection("chat_logs").document(user_id)
-    doc = doc_ref.get()
-    if doc.exists:
-        data = doc.to_dict()
-        return data.get("messages", [])
-    else:
-        return []
+    response = supabase.table("chat_logs").select("messages").eq("user_id", user_id).execute()
+    if response.data:
+        return response.data[0].get("messages", [])
+    return []
 
 def save_chat_log(messages, user_id="default_user"):
-    doc_ref = db.collection("chat_logs").document(user_id)
-    doc_ref.set({"messages": messages})
+    supabase.table("chat_logs").upsert({"user_id": user_id, "messages": messages}).execute()
 
 def RealtimeInformation():
     now = datetime.datetime.now()
@@ -64,13 +53,11 @@ def RealtimeInformation():
     )
 
 def AnswerModifier(answer):
-    # Remove extra whitespace
     return re.sub(r"\s+", " ", answer).strip()
 
 def ChatBot(query, user_id="default_user"):
     try:
         messages = load_chat_log(user_id)
-
         messages.append({"role": "user", "content": query})
 
         completion = client.chat.completions.create(
@@ -90,19 +77,17 @@ def ChatBot(query, user_id="default_user"):
         answer = AnswerModifier(answer)
 
         messages.append({"role": "assistant", "content": answer})
-
         save_chat_log(messages, user_id)
 
         return answer
 
     except Exception as e:
         print(f"Error: {e}")
-        # Reset chat log on error
         save_chat_log([], user_id)
         return ChatBot(query, user_id)
 
 if __name__ == "__main__":
-    user_id = "default_user"  # Change if you want multiple user sessions
+    user_id = "default_user"
     while True:
         user_input = input("Enter your question: ")
         print(ChatBot(user_input, user_id))
