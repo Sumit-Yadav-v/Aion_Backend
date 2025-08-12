@@ -8,11 +8,16 @@ import re
 # Ensure Data folder exists
 os.makedirs("Data", exist_ok=True)
 
-# Load environment variables from .env
-env_vars = dotenv_values(".env")
-creater = env_vars.get("Username")
-PersonalAssistant = env_vars.get("Assistantname")
-GroqAPIKey = env_vars.get("GroqAPIKey")
+# Load .env file locally (won't affect Vercel since .env usually isn't present there)
+load_dotenv()
+
+# Get environment variables
+creater = os.environ.get("Username")
+PersonalAssistant = os.environ.get("Assistantname")
+GroqAPIKey = os.environ.get("GroqAPIKey")
+
+if not GroqAPIKey:
+    raise ValueError("GroqAPIKey environment variable not set.")
 
 # Create Groq client
 client = Groq(api_key=GroqAPIKey)
